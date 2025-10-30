@@ -27,12 +27,76 @@ async function setupCacheDir(path) {
   }
 }
 
+async function readImage(code) {
+  const filePath = path.join(opts.cache, `${code}.jpg`);
+  try {
+    const data = await fs.readFile(filePath);
+    return data;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function deleteImage(code) {
+  const filePath = path.join(opts.cache, `${code}.jpg`);
+  try {
+    await fs.unlink(filePath);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 const cacheDir = path.resolve(opts.cache);
 await setupCacheDir(cacheDir);
 
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('it works fine\n');
+const server = http.createServer(async (req, res) => {
+  const code = req.url.split('/')[1];
+  const imagePath = path.join(opts.cache, `${code}.jpg`);
+  if (!Number(code)) {
+    res.writeHead(404);
+    res.end('resource not found\n');
+    return;
+  }
+
+  if (req.method === 'GET') {
+    const data = await readImage(code);
+    if (data) {
+      res.writeHead(200, { "Content-Type": "image/jpeg" });
+      res.end(data);
+    } else {
+      res.writeHead(404);
+      res.end("picture not found\n");
+    }
+  } else if (req.method === 'PUT') {
+    try {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+
+      await fs.writeFile(imagePath, buffer);
+      res.writeHead(201);
+      res.end('image saved successfully\n');
+    } catch (err) {
+      res.writeHead(500);
+      res.end('internal server error\n');
+    }
+  } else if (req.method === 'DELETE') {
+    const isDeleted = await deleteImage(code);
+    if (isDeleted) {
+      res.writeHead(200)
+      res.end('image deleted successfully\n');
+    } else {
+      res.writeHead(404)
+      res.end('image not found');
+    }
+  } else {
+    res.writeHead(405)
+    res.end("method not allowed\n");
+  }
+
 })
 
 server.listen(opts.port, opts.host, () => {

@@ -1,0 +1,4 @@
+curl -X PUT --data-binary @image.jpg http://localhost:8080/200
+curl http://localhost:8080/200 -o temp.jpg
+curl -X DELETE http://localhost:8080/200
+curl -X POST http://localhost:8080/200
