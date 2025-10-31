@@ -2,6 +2,7 @@ import { program } from "commander";
 import http from 'node:http';
 import fs from "node:fs/promises";
 import path from "node:path";
+import superagent from 'superagent';
 
 program
   .requiredOption('-h, --host <host>', 'host address')
@@ -47,6 +48,15 @@ async function deleteImage(code) {
   }
 }
 
+async function fetchImage(code) {
+  try {
+    const response = await superagent.get(`https://httpgoats.com/${code}.jpg`).responseType('arraybuffer');
+    return Buffer.from(response.body); 
+  } catch (error) {
+    return null; 
+  }
+}
+
 const cacheDir = path.resolve(opts.cache);
 await setupCacheDir(cacheDir);
 
@@ -60,13 +70,21 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET') {
-    const data = await readImage(code);
+    let data = await readImage(code);
     if (data) {
       res.writeHead(200, { "Content-Type": "image/jpeg" });
       res.end(data);
     } else {
-      res.writeHead(404);
-      res.end("picture not found\n");
+      console.log('making request to external server...');
+      let data = await fetchImage(code);
+      if (data) {
+        await fs.writeFile(imagePath, data);
+        res.writeHead(200, { "Content-Type": "image/jpeg" });
+        res.end(data);
+      } else {
+        res.writeHead(404);
+        res.end("picture not found\n");
+      }
     }
   } else if (req.method === 'PUT') {
     try {
@@ -90,7 +108,7 @@ const server = http.createServer(async (req, res) => {
       res.end('image deleted successfully\n');
     } else {
       res.writeHead(404)
-      res.end('image not found');
+      res.end('image not found\n');
     }
   } else {
     res.writeHead(405)
